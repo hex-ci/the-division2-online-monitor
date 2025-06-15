@@ -57,7 +57,7 @@ DetectHiddenWindows(true)
   }
 
   global antiIdleEnable := !antiIdleEnable
-  global antiIdleCounter := 0
+  global checkCounter := 0
 
   if (antiIdleEnable)
   {
