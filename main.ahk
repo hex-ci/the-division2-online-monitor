@@ -1,5 +1,12 @@
 #Requires AutoHotkey v2.0
 
+; 需要配置的全局变量
+
+robotToken := "你的钉钉机器人的 Token"
+checkInterval := 20  ; 每 x 次 B 键触发一次屏幕检查
+
+; ======= 以下内容一般无需修改 =======
+
 ListLines(false)
 
 #Include ./lib/ImagePut.ahk
@@ -24,11 +31,9 @@ SetWorkingDir(A_ScriptDir)
 PID := DllCall("GetCurrentProcessId")
 ProcessSetPriority("High", PID)
 
-; 全局变量声明
-robotToken := "你的钉钉机器人的 Token"
+; 定义全局变量
 antiIdleEnable := false
-screenshotsCounter := 0
-screenshotsInterval := 20  ; 每 x 次 B 键触发一次屏幕截图
+checkCounter := 0
 voiceObject := ComObject("SAPI.SpVoice")
 voiceObject.Volume := 100
 
@@ -91,7 +96,7 @@ Speak(Text)
 
 AntiIdleTask()
 {
-  global antiIdleEnable, screenshotsCounter, screenshotsInterval
+  global antiIdleEnable, checkCounter, checkInterval
 
   ; 如果防退出功能未启用，则直接返回。
   if (!antiIdleEnable) {
@@ -100,45 +105,36 @@ AntiIdleTask()
 
   SendKey("b") ; 发送 B 键
 
-  screenshotsCounter += 1
+  checkCounter += 1
 
-  ; 根据 screenshotsInterval 触发截图
-  if (screenshotsCounter >= screenshotsInterval)
+  if (checkCounter >= checkInterval)
   {
+    checkCounter := 0  ; 重置截图计数器
+
     Sleep(2000)
-    Screenshots()
-    screenshotsCounter := 0  ; 重置截图计数器
-    Sleep(2000)
+    CheckScreen()
   }
 }
 
-Screenshots() {
-  ; 截图并保存带时间戳的文件名
-  timestamp := FormatTime(, "yyyyMMdd-HHmmss")
+CheckScreen()
+{
   now := FormatTime(, "yyyy-MM-dd HH:mm:ss")
-  imagePath := A_Temp . "/screenshots_" . timestamp . ".jpg"
 
-  ImagePutFile([0, 0, A_ScreenWidth, A_ScreenHeight], imagePath, 70)
+  ocrResult := OCR.FromRect(0, 0, A_ScreenWidth, A_ScreenHeight)
 
-  OcrResult := OCR.FromFile(imagePath, {
-    decoder: "jpeg",
-  })
+  matchIndex := RegExMatch(ocrResult.Text, "DELTA-\d+")
 
-  MatchIndex := RegExMatch(OcrResult.Text, "DELTA-\d+")
-
-  if (MatchIndex > 0)
+  if (matchIndex > 0)
   {
-    SendRobotText("全境封锁2 挂机监控`n`n`n" . OcrResult.Text . "`n`n`n" . now)
+    SendRobotText("全境封锁2 挂机监控`n`n`n" . ocrResult.Text . "`n`n`n" . now)
   }
-
-  ; 清理文件
-  FileDelete(imagePath)
 }
 
-SendRobotText(text) {
+SendRobotText(text)
+{
   global robotToken
 
-  web := ComObject('WinHttp.WinHttpRequest.5.1')
+  web := ComObject("WinHttp.WinHttpRequest.5.1")
   web.Open("POST", "https://oapi.dingtalk.com/robot/send?access_token=" . robotToken)
   web.SetRequestHeader("Content-Type", "application/json")
 
